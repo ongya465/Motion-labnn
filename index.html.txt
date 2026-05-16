@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Rehab AI Ultimate</title>
+
+<style>
+body { text-align:center; font-family:sans-serif; }
+video, canvas { width:320px; }
+.good { color:green; }
+.mid { color:orange; }
+.bad { color:red; }
+</style>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+</head>
+
+<body>
+
+<h1>🏥 Rehab AI Ultimate</h1>
+
+<!-- 🔹 입력 -->
+<p>부위 선택</p>
+<select id="part"></select>
+
+<button onclick="recommend()">운동 추천</button>
+
+<h2 id="exerciseName"></h2>
+
+<hr>
+
+<!-- 🔹 카메라 -->
+<video id="video" autoplay></video>
+<canvas id="canvas"></canvas>
+
+<br>
+<button onclick="startCamera()">카메라 시작</button>
+
+<h2 id="aiFeedback"></h2>
+
+<hr>
+
+<!-- 🔹 평가 -->
+<p>통증 (1~10)</p>
+<input type="number" id="pain" value="3">
+
+<p>정확도 (1~10)</p>
+<input type="number" id="accuracy" value="7">
+
+<br><br>
+<button onclick="evaluate()">평가</button>
+
+<h2 id="score"></h2>
+
+<script>
+
+// 🔥 70개 데이터 (핵심 일부 예시 → 계속 추가 가능)
+const rehabData = {
+  "목": "턱 당기기",
+  "어깨": "외회전 운동",
+  "허리": "버드독",
+  "무릎": "스쿼트",
+  "발목": "균형 훈련",
+  "고관절": "클램쉘",
+  "코어": "플랭크"
+};
+
+// 드롭다운 생성
+const partSelect = document.getElementById("part");
+Object.keys(rehabData).forEach(p=>{
+  let option = document.createElement("option");
+  option.text = p;
+  partSelect.add(option);
+});
+
+let currentExercise = "";
+
+// 🔥 추천
+function recommend(){
+  let part = document.getElementById("part").value;
+  currentExercise = rehabData[part];
+
+  document.getElementById("exerciseName").innerText =
+    "추천 운동: " + currentExercise;
+}
+
+// 🎥 카메라
+let video = document.getElementById("video");
+let canvas = document.getElementById("canvas");
+let ctx = canvas.getContext("2d");
+
+function startCamera(){
+  const camera = new Camera(video, {
+    onFrame: async () => {
+      await pose.send({image: video});
+    },
+    width: 320,
+    height: 320
+  });
+  camera.start();
+}
+
+// 🤖 Pose 모델
+const pose = new Pose({
+  locateFile: (file) => {
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+  }
+});
+
+pose.setOptions({
+  modelComplexity: 0,
+  smoothLandmarks: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+
+// 🔥 자세 분석
+pose.onResults(results => {
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+  if(!results.poseLandmarks) return;
+
+  let lm = results.poseLandmarks;
+  let feedback = "";
+
+  // 🔥 운동별 분석 자동 적용
+  if(currentExercise.includes("스쿼트")){
+
+    let hip = lm[23].y;
+    let knee = lm[25].y;
+
+    if(knee < hip){
+      feedback = "👍 스쿼트 깊이 충분";
+    } else {
+      feedback = "⬇️ 더 내려가세요";
+    }
+
+  } else if(currentExercise.includes("플랭크")){
+
+    let shoulder = lm[11].y;
+    let hip = lm[23].y;
+
+    if(Math.abs(shoulder - hip) < 0.1){
+      feedback = "🔥 플랭크 자세 완벽";
+    } else {
+      feedback = "⚠️ 허리 꺾임";
+    }
+
+  } else if(currentExercise.includes("클램쉘")){
+
+    feedback = "👉 옆으로 누워 골반 고정 유지하세요";
+
+  } else if(currentExercise.includes("턱")){
+
+    feedback = "👉 턱을 살짝 당겨 목을 세우세요";
+
+  } else {
+    feedback = "👉 자세 유지하며 천천히 수행";
+  }
+
+  document.getElementById("aiFeedback").innerText = feedback;
+});
+
+// 🔥 평가
+function evaluate(){
+  let pain = Number(document.getElementById("pain").value);
+  let accuracy = Number(document.getElementById("accuracy").value);
+
+  let score = (accuracy * 10) - (pain * 5);
+
+  let text = "";
+
+  if(score >= 70){
+    text = "🔥 좋음";
+  } else if(score >= 40){
+    text = "👍 보통";
+  } else {
+    text = "⚠️ 나쁨";
+  }
+
+  document.getElementById("score").innerText =
+    "점수: " + score + " / " + text;
+}
+
+</script>
+
+</body>
+</html>
